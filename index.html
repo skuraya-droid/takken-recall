@@ -115,6 +115,22 @@
   .toast.show { opacity: 1; transform: translate(-50%,0); }
   .ver { text-align: center; font-size: .68rem; color: var(--muted); padding: 8px 0 0; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+  .sync-state { font-size: .68rem; color: var(--muted); border: 1px solid var(--border); border-radius: 99px; padding: 2px 8px; }
+  .sync-state.ok { color: var(--maru); border-color: var(--maru); }
+  .sync-state.warn { color: var(--sankaku); border-color: var(--sankaku); }
+  .sync-state.err { color: var(--batsu); border-color: var(--batsu); }
+  .dlg { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .dlg-box { background: var(--card-bg); border-radius: 14px; padding: 18px; width: 100%; max-width: 460px; max-height: 88vh; overflow: auto; }
+  .dlg-box h2 { font-size: 1rem; margin: 0 0 4px; }
+  .dlg-box p.note { font-size: .76rem; color: var(--muted); margin: 0 0 14px; }
+  .dlg-box label { display: block; font-size: .76rem; font-weight: 700; color: var(--muted); margin: 10px 0 4px; }
+  .dlg-box input, .dlg-box select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px;
+    font-size: .88rem; background: var(--bg); color: var(--text); font-family: inherit; }
+  .dlg-box .hint { font-size: .72rem; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+  .dlg-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .dlg-actions button { flex: 1; padding: 10px; border-radius: 9px; font-size: .85rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .dlg-actions .primary { background: var(--primary); color: #fff; border: none; }
+  .dlg-actions .ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -123,7 +139,7 @@
   <div class="wrap">
     <div class="title-row">
       <h1>宅建 アクティブリコール</h1>
-      <span class="rate">全体 <b id="ovRate">–</b>／科目 <b id="subjRate">–</b></span>
+      <span class="rate"><span class="sync-state" id="syncState">同期オフ</span> 全体 <b id="ovRate">–</b>／科目 <b id="subjRate">–</b></span>
     </div>
     <div class="subj-tabs" id="subjTabs"></div>
     <div class="bar">
@@ -156,8 +172,9 @@
 
   <div class="toolbar">
     <button class="btn-plain" id="btnShuffle">🔀 順番をシャッフル</button>
-    <button class="btn-plain" id="btnBackup">⬇ バックアップ</button>
-    <button class="btn-plain" id="btnRestore">⬆ 復元</button>
+    <button class="btn-plain" id="btnBackup">⬇ 書き出し</button>
+    <button class="btn-plain" id="btnRestore">⬆ 読み込み</button>
+    <button class="btn-plain" id="btnSync">⚙ 同期設定</button>
     <button class="btn-plain" id="btnReset">記録を消す</button>
     <input type="file" id="fileInput" accept="application/json" style="display:none">
   </div>
@@ -172,21 +189,68 @@
   <div class="ver" id="verLabel"></div>
 </div>
 
+<div class="dlg" id="syncDialog">
+  <div class="dlg-box">
+    <h2>同期設定</h2>
+    <p class="note">設定すると、解答するたびに自動保存され、開いたときに自動で取り込みます。端末をまたいでも記録が揃います。</p>
+
+    <label for="syncMode">同期方法</label>
+    <select id="syncMode">
+      <option value="off">使わない（この端末だけに保存）</option>
+      <option value="github">GitHub のリポジトリに保存</option>
+      <option value="gas">Google Apps Script に保存</option>
+    </select>
+
+    <div id="ghFields" style="display:none">
+      <label for="ghOwner">GitHub ユーザー名</label>
+      <input id="ghOwner" placeholder="skuraya-droid" autocomplete="off">
+      <label for="ghRepo">リポジトリ名</label>
+      <input id="ghRepo" placeholder="takken-recall" autocomplete="off">
+      <label for="ghBranch">ブランチ</label>
+      <input id="ghBranch" value="main" autocomplete="off">
+      <label for="ghPath">ファイル名</label>
+      <input id="ghPath" value="progress.json" autocomplete="off">
+      <label for="ghToken">アクセストークン</label>
+      <input id="ghToken" type="password" placeholder="github_pat_..." autocomplete="off">
+      <div class="hint">Settings → Developer settings → Personal access tokens → Fine-grained tokens で発行します。対象はこのリポジトリのみ、権限は <b>Contents: Read and write</b> だけで足ります。トークンはこの端末のブラウザにのみ保存されます。</div>
+    </div>
+
+    <div id="gasFields" style="display:none">
+      <label for="gasUrl">ウェブアプリのURL</label>
+      <input id="gasUrl" placeholder="https://script.google.com/macros/s/..../exec" autocomplete="off">
+      <label for="gasToken">合言葉</label>
+      <input id="gasToken" type="password" placeholder="スクリプトに設定した文字列" autocomplete="off">
+      <div class="hint">同梱の <b>code.gs</b> を Google Apps Script に貼り付け、ウェブアプリとしてデプロイしたURLを入れてください。</div>
+    </div>
+
+    <div class="dlg-actions">
+      <button class="ghost" id="dlgCancel">キャンセル</button>
+      <button class="primary" id="dlgSave">保存して同期</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="data.js"></script>
 <script>
 /* ==========================================================================
    宅建 アクティブリコール
-   - 問題データは data.js（TAKKEN_DATA）にあります。カードの追加・修正はそちらで。
-   - 保存先は自動判定：Claudeのアーティファクト内では window.storage、
-     通常のWebページ（GitHub Pages等）では localStorage を使います。
+   - 問題データは data.js（TAKKEN_DATA）。カードの追加・修正はそちら。
+   - 学習記録の保存先は自動判定：
+       Claudeのアーティファクト内 → window.storage
+       通常のWebページ           → localStorage
+   - さらに「同期設定」でGitHubまたはGASを指定すると、
+     解答するたびに自動保存され、開いたときに自動で取り込みます。
    ========================================================================== */
-const APP_VERSION = '3.0';
+const APP_VERSION = '4.0';
 const STORAGE_KEY = 'takken-recall-v3';
 const PREF_KEY    = 'takken-recall-pref';
+const META_KEY    = 'takken-recall-meta';
+const SYNC_KEY    = 'takken-recall-sync';
+const SEED_URL    = 'progress.json';   // 同期未設定のときだけ読む初期データ
 
-/* --- 保存レイヤー（Claude / 通常Web 両対応） --- */
+/* --- ローカル保存（Claude / 通常Web 両対応） --- */
 const store = (() => {
   const claude = (typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function');
   return {
@@ -209,14 +273,85 @@ const store = (() => {
 /* --- 間隔復習の間隔（日数）。ここを変えれば復習ペースを調整できます --- */
 const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
 
+/* --- 文字列⇔Base64（日本語対応） --- */
+const b64 = {
+  enc(str) { const by = new TextEncoder().encode(str); let s = ''; by.forEach(b => s += String.fromCharCode(b)); return btoa(s); },
+  dec(b) { const bin = atob(String(b).replace(/\s/g, '')); return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))); }
+};
+
+/* --- カード単位のマージ（新しいタイムスタンプが勝つ） --- */
+function mergeRecords(base, incoming) {
+  const out = Object.assign({}, base);
+  Object.keys(incoming || {}).forEach(k => {
+    const cur = out[k], nx = incoming[k];
+    if (!nx) return;
+    if (!cur || !cur.t || (nx.t && nx.t > cur.t)) out[k] = nx;
+  });
+  return out;
+}
+
+/* --- 同期バックエンド --- */
+const backends = {
+  github: {
+    label: 'GitHub',
+    async pull(c) {
+      const url = 'https://api.github.com/repos/' + c.owner + '/' + c.repo + '/contents/' + c.path + '?ref=' + (c.branch || 'main') + '&t=' + Date.now();
+      const r = await fetch(url, { headers: { Authorization: 'Bearer ' + c.token, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+      if (r.status === 404) return { records: {}, sha: null };
+      if (!r.ok) throw new Error('GitHub 読み込み失敗 (' + r.status + ')');
+      const j = await r.json();
+      let data = {};
+      try { data = JSON.parse(b64.dec(j.content)); } catch (e) {}
+      return { records: data.records || {}, sha: j.sha };
+    },
+    async push(c, records, sha) {
+      const body = {
+        message: '学習記録の更新 ' + new Date().toISOString(),
+        content: b64.enc(JSON.stringify({ app: 'takken-recall', version: APP_VERSION, exportedAt: new Date().toISOString(), records: records }, null, 2)),
+        branch: c.branch || 'main'
+      };
+      if (sha) body.sha = sha;
+      const r = await fetch('https://api.github.com/repos/' + c.owner + '/' + c.repo + '/contents/' + c.path, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + c.token, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) throw new Error('GitHub 保存失敗 (' + r.status + ')');
+      const j = await r.json();
+      return j.content && j.content.sha;
+    }
+  },
+  gas: {
+    label: 'GAS',
+    async pull(c) {
+      const r = await fetch(c.url + '?token=' + encodeURIComponent(c.token || '') + '&t=' + Date.now(), { cache: 'no-store', redirect: 'follow' });
+      if (!r.ok) throw new Error('GAS 読み込み失敗 (' + r.status + ')');
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      return { records: j.records || {}, sha: null };
+    },
+    async push(c, records) {
+      const r = await fetch(c.url, {
+        method: 'POST', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // プリフライトを避ける
+        body: JSON.stringify({ token: c.token || '', records: records })
+      });
+      if (!r.ok) throw new Error('GAS 保存失敗 (' + r.status + ')');
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      return null;
+    }
+  }
+};
+
 (function () {
   const LABELS = [['maru', '◯ 即答'], ['sankaku', '△ 迷った'], ['batsu', '✕ 不可']];
   const SUBJECTS = TAKKEN_DATA;
 
-  let rec = {};            // { cardId: { s:'maru', d:'2026-08-18', n:2 } }
-  let filter = 'all';
-  let subjIdx = 0, unitIdx = 0;   // unitIdx -1 = この科目の苦手を総復習
-  let shuffle = false, query = '';
+  let rec = {};
+  let sync = { mode: 'off' };
+  let remoteSha = null;
+  let filter = 'all', subjIdx = 0, unitIdx = 0, shuffle = false, query = '';
   const opened = new Set();
   let order = {};
 
@@ -229,9 +364,9 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
   const today = () => new Date().toLocaleDateString('sv-SE');
   const addDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
   const statusOf = id => (rec[id] && rec[id].s) || null;
-  const isDue = c => { const r = rec[c.id]; return !r || !r.d || r.d <= today(); };
+  const isDue = c => { const r = rec[c.id]; return !r || !r.s || !r.d || r.d <= today(); };
 
-  /* --- 科目タブ --- */
+  /* ---------- 科目タブ ---------- */
   SUBJECTS.forEach((s, i) => {
     const b = document.createElement('button');
     b.innerHTML = s.subject + '<span class="n">0/' + s.all.length + '</span>';
@@ -250,7 +385,7 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
   selEl.addEventListener('change', () => { unitIdx = parseInt(selEl.value, 10); render(); savePref(); scrollTop(); });
   const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  /* --- カード生成 --- */
+  /* ---------- カード ---------- */
   function cardNode(c, showUnit) {
     const el = document.createElement('div');
     el.className = 'card';
@@ -286,13 +421,13 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
       const b = document.createElement('button');
       b.className = 'status-btn ' + k + (st === k ? ' active' : '');
       b.textContent = label;
-      b.addEventListener('click', () => { answer(c.id, k); });
+      b.addEventListener('click', () => answer(c.id, k));
       grp.appendChild(b);
     });
     el.appendChild(grp);
 
     const r = rec[c.id];
-    if (r && r.d) {
+    if (r && r.s && r.d) {
       const due = document.createElement('div');
       due.className = 'next-due';
       due.textContent = r.d <= today() ? '復習日：今日' : '次の復習：' + r.d.slice(5).replace('-', '/');
@@ -302,21 +437,21 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
   }
 
   function answer(id, k) {
-    const prev = rec[id];
-    if (prev && prev.s === k) { delete rec[id]; }
-    else {
-      let n = (k === 'maru') ? ((prev && prev.s === 'maru' ? (prev.n || 0) : 0) + 1) : 0;
+    const prev = rec[id], now = new Date().toISOString();
+    if (prev && prev.s === k) {
+      rec[id] = { s: null, n: 0, d: null, t: now };            // 取り消しも記録として残す（同期で復活しないように）
+    } else {
+      const n = (k === 'maru') ? ((prev && prev.s === 'maru' ? (prev.n || 0) : 0) + 1) : 0;
       const days = (k === 'maru') ? INTERVALS.maru[Math.min(n - 1, INTERVALS.maru.length - 1)] : INTERVALS[k];
-      rec[id] = { s: k, n: n, d: addDays(days) };
+      rec[id] = { s: k, n: n, d: addDays(days), t: now };
     }
     save(); render();
   }
 
-  /* --- 一覧の描画 --- */
+  /* ---------- 一覧 ---------- */
   function currentPool() {
     if (query) {
-      const q = query.toLowerCase();
-      const strip = h => h.replace(/<[^>]+>/g, '');
+      const q = query.toLowerCase(), strip = h => h.replace(/<[^>]+>/g, '');
       return everyCard.filter(c => (strip(c.q) + strip(c.a.join('')) + strip(c.trap || '') + c.unitName).toLowerCase().includes(q));
     }
     const s = SUBJECTS[subjIdx];
@@ -329,9 +464,7 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
       if (filter === 'weak' || unitIdx === -1) target = target.filter(c => statusOf(c.id) !== 'maru');
       else if (filter === 'due') target = target.filter(isDue);
     }
-    if (shuffle) {
-      target = target.slice().sort((a, b) => (order[a.id] || 0) - (order[b.id] || 0));
-    }
+    if (shuffle) target = target.slice().sort((a, b) => (order[a.id] || 0) - (order[b.id] || 0));
 
     listEl.innerHTML = '';
     const frag = document.createDocumentFragment();
@@ -342,8 +475,7 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
       emptyEl.style.display = 'block';
       emptyEl.textContent = query ? '「' + query + '」に一致するカードはありません。'
         : filter === 'due' ? '今日の復習はすべて終わりました。おつかれさまです。'
-        : unitIdx === -1 || filter === 'weak' ? 'この範囲に苦手カードはありません。'
-        : 'カードがありません。';
+        : (unitIdx === -1 || filter === 'weak') ? 'この範囲に苦手カードはありません。' : 'カードがありません。';
     } else emptyEl.style.display = 'none';
   }
 
@@ -379,9 +511,9 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
     $('dueCount').textContent = '(' + everyCard.filter(isDue).length + ')';
   }
 
-  function render() { renderStats(); renderList(); }
+  const render = () => { renderStats(); renderList(); };
 
-  /* --- 操作 --- */
+  /* ---------- フィルタ・検索・並び ---------- */
   document.querySelectorAll('#filterSeg button').forEach(b => {
     b.addEventListener('click', () => {
       filter = b.dataset.filter;
@@ -389,39 +521,28 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
       renderList();
     });
   });
-
-  const searchEl = $('search');
-  let sTimer;
+  const searchEl = $('search'); let sTimer;
   searchEl.addEventListener('input', () => {
     clearTimeout(sTimer);
-    sTimer = setTimeout(() => {
-      query = searchEl.value.trim();
-      $('btnClear').style.display = query ? 'block' : 'none';
-      render();
-    }, 200);
+    sTimer = setTimeout(() => { query = searchEl.value.trim(); $('btnClear').style.display = query ? 'block' : 'none'; render(); }, 200);
   });
   $('btnClear').addEventListener('click', () => { searchEl.value = ''; query = ''; $('btnClear').style.display = 'none'; render(); });
-
   $('btnShuffle').addEventListener('click', () => {
-    shuffle = !shuffle;
-    $('btnShuffle').classList.toggle('on', shuffle);
+    shuffle = !shuffle; $('btnShuffle').classList.toggle('on', shuffle);
     if (shuffle) everyCard.forEach(c => { order[c.id] = Math.random(); });
     renderList();
   });
-
   $('btnPrev').addEventListener('click', () => { if (unitIdx > 0) { unitIdx--; selEl.value = String(unitIdx); render(); savePref(); scrollTop(); } });
   $('btnNext').addEventListener('click', () => {
     if (unitIdx !== -1 && unitIdx < SUBJECTS[subjIdx].units.length - 1) { unitIdx++; selEl.value = String(unitIdx); render(); savePref(); scrollTop(); }
   });
 
-  /* --- バックアップ／復元 --- */
+  /* ---------- 書き出し・読み込み・リセット ---------- */
   $('btnBackup').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify({ app: 'takken-recall', version: APP_VERSION, exportedAt: new Date().toISOString(), records: rec }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'takken-recall-' + today() + '.json';
-    a.click(); URL.revokeObjectURL(a.href);
-    toast('バックアップを保存しました');
+    a.href = URL.createObjectURL(blob); a.download = 'progress.json'; a.click(); URL.revokeObjectURL(a.href);
+    toast('progress.json を書き出しました');
   });
   $('btnRestore').addEventListener('click', () => $('fileInput').click());
   $('fileInput').addEventListener('change', e => {
@@ -429,54 +550,166 @@ const INTERVALS = { batsu: 1, sankaku: 3, maru: [7, 14, 30, 60] };
     const fr = new FileReader();
     fr.onload = () => {
       try {
-        const d = JSON.parse(fr.result);
-        const r = d.records || d;
-        if (typeof r !== 'object') throw new Error('形式が違います');
-        rec = normalize(r); save(); render(); toast('記録を復元しました');
+        const d = JSON.parse(fr.result), r = d.records || d;
+        if (typeof r !== 'object') throw new Error();
+        rec = mergeRecords(rec, normalize(r)); save(); render(); toast('記録を読み込みました');
       } catch (err) { toast('ファイルを読み込めませんでした'); }
       e.target.value = '';
     };
     fr.readAsText(f);
   });
-
   $('btnReset').addEventListener('click', async () => {
-    if (!confirm('全科目の◯△✕の記録を消します。よろしいですか？\n（先にバックアップを取ることをおすすめします）')) return;
-    rec = {}; render();
-    await store.del(STORAGE_KEY); toast('記録を消しました');
+    if (!confirm('全科目の◯△✕の記録を消します。よろしいですか？\n（同期を設定している場合は同期先の記録も消えます）')) return;
+    const now = new Date().toISOString();
+    Object.keys(rec).forEach(k => { rec[k] = { s: null, n: 0, d: null, t: now }; });
+    save(); render(); toast('記録を消しました');
   });
 
-  /* --- 保存・読込 --- */
+  /* ---------- 保存と同期 ---------- */
   function normalize(obj) {
     const out = {};
     Object.keys(obj || {}).forEach(k => {
       const v = obj[k];
-      if (typeof v === 'string') out[k] = { s: v, n: v === 'maru' ? 1 : 0, d: today() };   // 旧バージョンからの移行
-      else if (v && v.s) out[k] = v;
+      if (typeof v === 'string') out[k] = { s: v, n: v === 'maru' ? 1 : 0, d: today(), t: '1970-01-01T00:00:00.000Z' };
+      else if (v && typeof v === 'object' && ('s' in v)) out[k] = { s: v.s || null, n: v.n || 0, d: v.d || null, t: v.t || '1970-01-01T00:00:00.000Z' };
     });
     return out;
   }
-  async function save() { const ok = await store.set(STORAGE_KEY, JSON.stringify(rec)); if (!ok) toast('記録を保存できませんでした'); }
+
+  let pushTimer = null;
+  async function save() {
+    await store.set(STORAGE_KEY, JSON.stringify(rec));
+    await store.set(META_KEY, JSON.stringify({ updatedAt: new Date().toISOString() }));
+    if (sync.mode !== 'off') {
+      setSyncState('pending');
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(pushNow, 2500);            // 連打をまとめて送る
+    }
+  }
   async function savePref() { await store.set(PREF_KEY, JSON.stringify({ subjIdx, unitIdx })); }
 
+  async function pushNow() {
+    if (sync.mode === 'off') return;
+    const be = backends[sync.mode];
+    try {
+      setSyncState('busy');
+      remoteSha = await be.push(sync, rec, remoteSha);
+      setSyncState('ok');
+    } catch (e) {
+      if (sync.mode === 'github' && /409|422/.test(e.message)) {   // 競合したら取り直して再送
+        try { const r = await be.pull(sync); remoteSha = r.sha; rec = mergeRecords(rec, normalize(r.records)); await be.push(sync, rec, remoteSha); setSyncState('ok'); render(); return; }
+        catch (e2) {}
+      }
+      setSyncState('error', e.message);
+    }
+  }
+
+  async function pullNow(silent) {
+    if (sync.mode === 'off') return false;
+    try {
+      setSyncState('busy');
+      const r = await backends[sync.mode].pull(sync);
+      remoteSha = r.sha;
+      const before = JSON.stringify(rec);
+      rec = mergeRecords(rec, normalize(r.records));
+      setSyncState('ok');
+      if (JSON.stringify(rec) !== before) {
+        await store.set(STORAGE_KEY, JSON.stringify(rec));
+        if (!silent) toast('同期先の記録を取り込みました');
+        return true;
+      }
+    } catch (e) { setSyncState('error', e.message); if (!silent) toast('同期に失敗：' + e.message); }
+    return false;
+  }
+
+  function setSyncState(state, msg) {
+    const el = $('syncState');
+    const map = { off: ['同期オフ', ''], pending: ['保存待ち…', 'warn'], busy: ['同期中…', 'warn'], ok: ['同期済み', 'ok'], error: ['同期エラー', 'err'] };
+    const [t, cls] = map[state] || map.off;
+    el.textContent = (sync.mode === 'off' ? '同期オフ' : backends[sync.mode].label + '：' + t);
+    el.className = 'sync-state ' + cls;
+    el.title = msg || '';
+  }
+
+  /* ---------- 同期設定ダイアログ ---------- */
+  const dlg = $('syncDialog');
+  function openDialog() {
+    $('syncMode').value = sync.mode;
+    $('ghOwner').value = sync.owner || ''; $('ghRepo').value = sync.repo || '';
+    $('ghBranch').value = sync.branch || 'main'; $('ghPath').value = sync.path || 'progress.json';
+    $('ghToken').value = sync.token && sync.mode === 'github' ? sync.token : '';
+    $('gasUrl').value = sync.url || ''; $('gasToken').value = sync.token && sync.mode === 'gas' ? sync.token : '';
+    switchMode(); dlg.style.display = 'flex';
+  }
+  function switchMode() {
+    const m = $('syncMode').value;
+    $('ghFields').style.display = m === 'github' ? 'block' : 'none';
+    $('gasFields').style.display = m === 'gas' ? 'block' : 'none';
+  }
+  $('btnSync').addEventListener('click', openDialog);
+  $('syncMode').addEventListener('change', switchMode);
+  $('dlgCancel').addEventListener('click', () => { dlg.style.display = 'none'; });
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.style.display = 'none'; });
+
+  $('dlgSave').addEventListener('click', async () => {
+    const m = $('syncMode').value;
+    if (m === 'off') sync = { mode: 'off' };
+    else if (m === 'github') {
+      sync = { mode: 'github', owner: $('ghOwner').value.trim(), repo: $('ghRepo').value.trim(),
+               branch: $('ghBranch').value.trim() || 'main', path: $('ghPath').value.trim() || 'progress.json',
+               token: $('ghToken').value.trim() };
+      if (!sync.owner || !sync.repo || !sync.token) return toast('ユーザー名・リポジトリ名・トークンを入力してください');
+    } else {
+      sync = { mode: 'gas', url: $('gasUrl').value.trim(), token: $('gasToken').value.trim() };
+      if (!sync.url) return toast('ウェブアプリのURLを入力してください');
+    }
+    await store.set(SYNC_KEY, JSON.stringify(sync));
+    dlg.style.display = 'none';
+    setSyncState(sync.mode === 'off' ? 'off' : 'busy');
+    if (sync.mode !== 'off') { await pullNow(); await pushNow(); render(); toast('同期を設定しました'); }
+  });
+
+  /* ---------- 起動 ---------- */
   async function load() {
     const raw = await store.get(STORAGE_KEY);
     if (raw) { try { rec = normalize(JSON.parse(raw)); } catch (e) { rec = {}; } }
     const p = await store.get(PREF_KEY);
-    if (p) {
+    if (p) { try { const o = JSON.parse(p);
+      if (typeof o.subjIdx === 'number' && SUBJECTS[o.subjIdx]) subjIdx = o.subjIdx;
+      if (typeof o.unitIdx === 'number') unitIdx = o.unitIdx === -1 ? -1 : Math.min(o.unitIdx, SUBJECTS[subjIdx].units.length - 1);
+    } catch (e) {} }
+    const sc = await store.get(SYNC_KEY);
+    if (sc) { try { sync = JSON.parse(sc) || { mode: 'off' }; } catch (e) {} }
+
+    buildUnitSelect(); render();
+    setSyncState(sync.mode === 'off' ? 'off' : 'busy');
+
+    if (sync.mode !== 'off') { await pullNow(true); render(); }
+    else if (SEED_URL) {                                   // 同期オフのときだけ progress.json を見る
       try {
-        const o = JSON.parse(p);
-        if (typeof o.subjIdx === 'number' && SUBJECTS[o.subjIdx]) subjIdx = o.subjIdx;
-        if (typeof o.unitIdx === 'number') unitIdx = Math.min(o.unitIdx, SUBJECTS[subjIdx].units.length - 1);
-        if (o.unitIdx === -1) unitIdx = -1;
+        const res = await fetch(SEED_URL + '?t=' + Date.now(), { cache: 'no-store' });
+        if (res.ok) {
+          const seed = await res.json();
+          if (seed && seed.records) {
+            const before = JSON.stringify(rec);
+            rec = mergeRecords(rec, normalize(seed.records));
+            if (JSON.stringify(rec) !== before) { await store.set(STORAGE_KEY, JSON.stringify(rec)); render(); toast('共有ファイルから記録を取り込みました'); }
+          }
+        }
       } catch (e) {}
     }
-    buildUnitSelect(); render();
   }
+
+  /* 別端末での更新を拾う：復帰時に取り込み、離脱時に確実に送る */
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { if (sync.mode !== 'off') pullNow(true).then(ok => { if (ok) render(); }); }
+    else if (pushTimer) { clearTimeout(pushTimer); pushNow(); }
+  });
 
   let tid;
   function toast(m) {
     const t = $('toast'); t.textContent = m; t.classList.add('show');
-    clearTimeout(tid); tid = setTimeout(() => t.classList.remove('show'), 2400);
+    clearTimeout(tid); tid = setTimeout(() => t.classList.remove('show'), 2600);
   }
 
   $('verLabel').textContent = 'v' + APP_VERSION + '｜全' + everyCard.length + '問｜保存先：' + (store.mode === 'claude' ? 'Claude' : 'このブラウザ');
