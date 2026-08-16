@@ -1,7 +1,7 @@
 {
   "app": "takken-recall",
   "version": "4.1",
-  "exportedAt": "2026-08-16T08:00:51.897Z",
+  "exportedAt": "2026-08-16T08:01:08.492Z",
   "records": {
     "a1": {
       "s": "sankaku",
@@ -451,7 +451,7 @@
       "s": null,
       "n": 0,
       "d": null,
-      "t": "2026-08-16T08:00:49.386Z"
+      "t": "2026-08-16T08:01:05.983Z"
     },
     "b1": {
       "s": "sankaku",
