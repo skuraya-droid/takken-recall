@@ -234,7 +234,12 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="data.js"></script>
+<script>
+/* data.js はキャッシュさせない。毎回タイムスタンプを付けて取りに行く。
+   document.write は同期的に読み込むので、下のスクリプトより先に
+   TAKKEN_DATA が確実に定義される。 */
+document.write('<scr' + 'ipt src="data.js?t=' + Date.now() + '"><\/scr' + 'ipt>');
+</script>
 <script>
 /* ==========================================================================
    宅建 アクティブリコール
@@ -245,7 +250,7 @@
    - さらに「同期設定」でGitHubまたはGASを指定すると、
      解答するたびに自動保存され、開いたときに自動で取り込みます。
    ========================================================================== */
-const APP_VERSION = '4.1';
+const APP_VERSION = '4.2';
 const STORAGE_KEY = 'takken-recall-v3';
 const PREF_KEY    = 'takken-recall-pref';
 const META_KEY    = 'takken-recall-meta';
